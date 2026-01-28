@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mini GTA City</title>
+<style>
+body { margin:0; overflow:hidden; background:black; }
+#hud {
+  position:absolute;
+  top:15px; left:15px;
+  color:white;
+  font-family:Arial;
+  background:rgba(0,0,0,0.4);
+  padding:10px 14px;
+  border-radius:10px;
+}
+</style>
+</head>
+<body>
+<div id="hud">Speed: 0 | 🚓 Wanted: LOW</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
+<script>
+/* SCENE */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87b9ff);
+
+/* CAMERA */
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 1000);
+
+/* RENDERER */
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+/* LIGHT */
+scene.add(new THREE.AmbientLight(0xffffff,0.5));
+const sun = new THREE.DirectionalLight(0xffffff,0.8);
+sun.position.set(50,100,20);
+sun.castShadow = true;
+scene.add(sun);
+
+/* ROAD */
+const roadMat = new THREE.MeshStandardMaterial({color:0x2a2a2a});
+const road = new THREE.Mesh(new THREE.PlaneGeometry(600,600), roadMat);
+road.rotation.x = -Math.PI/2;
+road.receiveShadow = true;
+scene.add(road);
+
+/* BUILDINGS */
+for(let x=-250;x<=250;x+=60){
+  for(let z=-250;z<=250;z+=60){
+    if(Math.abs(x)<40 || Math.abs(z)<40) continue;
+    let h = Math.random()*60+20;
+    let b = new THREE.Mesh(
+      new THREE.BoxGeometry(40,h,40),
+      new THREE.MeshStandardMaterial({color:0x888888})
+    );
+    b.position.set(x,h/2,z);
+    b.castShadow = true;
+    scene.add(b);
+  }
+}
+
+/* PLAYER CAR */
+const car = new THREE.Mesh(
+  new THREE.BoxGeometry(8,4,16),
+  new THREE.MeshStandardMaterial({color:0x00e5ff})
+);
+car.position.set(0,2,0);
+car.castShadow = true;
+scene.add(car);
+
+/* POLICE */
+const police = [];
+for(let i=0;i<4;i++){
+  let p = new THREE.Mesh(
+    new THREE.BoxGeometry(8,4,16),
+    new THREE.MeshStandardMaterial({color:0xff0000})
+  );
+  p.position.set(Math.random()*200-100,2,Math.random()*200-100);
+  police.push(p);
+  scene.add(p);
+}
+
+/* STATE */
+let speed = 0;
+let angle = 0;
+let wanted = 0;
+
+/* INPUT */
+const keys = {};
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=true);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+/* LOOP */
+function animate(){
+  requestAnimationFrame(animate);
+
+  /* CAR PHYSICS */
+  if(keys["w"]) speed += 0.04;
+  if(keys["s"]) speed -= 0.05;
+  speed *= keys[" "] ? 0.92 : 0.97;
+  speed = Math.max(-2, Math.min(3, speed));
+
+  if(keys["a"]) angle += 0.04 * (speed/2);
+  if(keys["d"]) angle -= 0.04 * (speed/2);
+
+  car.rotation.y = angle;
+  car.position.x += Math.sin(angle) * speed;
+  car.position.z += Math.cos(angle) * speed;
+
+  /* CAMERA FOLLOW */
+  camera.position.lerp(new THREE.Vector3(
+    car.position.x - Math.sin(angle)*30,
+    18,
+    car.position.z - Math.cos(angle)*30
+  ), 0.1);
+  camera.lookAt(car.position);
+
+  /* POLICE AI */
+  police.forEach(p=>{
+    let dx = car.position.x - p.position.x;
+    let dz = car.position.z - p.position.z;
+    let dist = Math.hypot(dx,dz);
+
+    if(dist < 120){
+      wanted = Math.min(3, wanted + 0.002);
+      p.rotation.y = Math.atan2(dx,dz);
+      p.position.x += (dx/dist)*0.6;
+      p.position.z += (dz/dist)*0.6;
+    }
+
+    if(dist < 6){
+      speed *= 0.5;
+      wanted = 3;
+    }
+  });
+
+  wanted *= 0.995;
+
+  /* HUD */
+  document.getElementById("hud").innerText =
+    `Speed: ${speed.toFixed(1)} | 🚓 Wanted: ${wanted>2?"HIGH":wanted>1?"MED":"LOW"}`;
+
+  renderer.render(scene,camera);
+}
+animate();
+
+/* RESIZE */
+addEventListener("resize",()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
